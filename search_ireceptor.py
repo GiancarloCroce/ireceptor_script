@@ -191,16 +191,17 @@ def getRepertoires(repertoire_url):
     repertoire_info = json_data["Repertoire"]
     #print("Searching in {0} repertoires ".format(len(repertoire_info)))
     ID_study = pd.json_normalize(repertoire_info)
-    #ID_study_total = ID_study_total.append(ID_study)
-    ### DOESNT WORK FOR IPA4
-    #for repertoire in repertoire_info:
-        #I = ("repertoire ID",repertoire["repertoire_id"],"STUDY ID",repertoire["study"]["study_id"])
-        #print(I)
-        #ID_study = ID_study.append(I)
-        #for i in repertoire["subject"]["diagnosis"]:#["disease_diagnosis"]:
-            #for j in i:
-                #print("Disease disagnosis",i["disease_diagnosis"]["label"])
-    data =pd.DataFrame(ID_study[["repertoire_id","subject.subject_id","study.study_id","subject.diagnosis"]])
+    data = pd.DataFrame(ID_study[["repertoire_id","subject.subject_id","study.study_id","subject.diagnosis"]])
+
+    #MHC COLUMNS: N.B different name for mhc columns in different repositories.... -> adapt them
+    mhc_col = "MHC"
+    if 'vdjserver' in repertoire_url:
+        mhc_col = 'subject.mhc'
+    if 'airr-covid-19' in repertoire_url:
+        mhc_col = 'subject.genotype.mhc_genotype_set.mhc_genotype_set_id'
+    if mhc_col in ID_study.columns:
+        data[mhc_col] = ID_study[mhc_col]
+
     #print("##########################LENGTH",len(repertoire_info))
     #Diagnosis = []
     #for repertoire in repertoire_info:
@@ -270,8 +271,6 @@ if __name__ == "__main__":
     if os.path.isdir(options.out_folder):
         print("ERROR! Output folder {0} already exists! Please choose another name".format(options.out_folder))
         sys.exit(1)
-    else:
-        os.makedirs(options.out_folder)
 
     #get the list of all repositories url
     df_all_repositories = get_list_repositories()
@@ -298,32 +297,32 @@ if __name__ == "__main__":
             #print(all_row_rep)
             pbar = tqdm(all_row_rep)
             for row_rep in pbar:
-                try:
-                    pbar.set_description("Processing {0}".format(row_rep))
-                    df_repertoires = getRepertoires(row_rep + repertoire_entry_point) #options.repertoire_api)
-                    df_cdr3_search  = searchCDR3_single_seq(row_rep + rearrangement_entry_point, cdr3, False) #options.verbose)
-                    if len(df_cdr3_search) == 0:
-                        #print("%%% NO MATCHES in this URL: {0}".format(row_rep))
-                        continue
-                    df_merged  = pd.merge(df_repertoires, df_cdr3_search ,on="repertoire_id")
-                    ###NEED TO DISCUSS IF I REMOVE DUPLETS
-                    df_merged = df_merged.drop_duplicates(subset = "sequence_id")#,keep = False, inplace = True)
-                    #print("###### FOUND {0} sequences in {1}".format(df_merged.shape[0], row_rep))
-                    if options.same_VJ:
-                        v_gene = df_cdr3_tmp['{0}V'.format(chain)]
-                        j_gene = df_cdr3_tmp['{0}J'.format(chain)]
-                        #print("Considering only TCR with the same V ({0}) and J ({1}) genes".format(v_gene, j_gene))
-                        df_merged = df_merged.loc[df_merged['v_gene'].str.contains(v_gene)]
-                        if len(df_merged) > 0:
-                            df_merged = df_merged.loc[df_merged['j_gene'].str.contains(j_gene)]
-                        #print("Keeping {0} sequences".format(len(df_merged)))
-                    if len(df_merged) == 0:
-                        #print("FOUND NO MATCHES")
-                        continue
-                    dfs.append(df_merged)
-                except:
-                    print("ERROR with {0}".format(row_rep))
+                #try:
+                pbar.set_description("Processing {0}".format(row_rep))
+                df_repertoires = getRepertoires(row_rep + repertoire_entry_point) #options.repertoire_api)
+                df_cdr3_search  = searchCDR3_single_seq(row_rep + rearrangement_entry_point, cdr3, False) #options.verbose)
+                if len(df_cdr3_search) == 0:
+                    #print("%%% NO MATCHES in this URL: {0}".format(row_rep))
                     continue
+                df_merged  = pd.merge(df_repertoires, df_cdr3_search ,on="repertoire_id")
+                ###NEED TO DISCUSS IF I REMOVE DUPLETS
+                df_merged = df_merged.drop_duplicates(subset = "sequence_id")#,keep = False, inplace = True)
+                #print("###### FOUND {0} sequences in {1}".format(df_merged.shape[0], row_rep))
+                if options.same_VJ:
+                    v_gene = df_cdr3_tmp['{0}V'.format(chain)]
+                    j_gene = df_cdr3_tmp['{0}J'.format(chain)]
+                    #print("Considering only TCR with the same V ({0}) and J ({1}) genes".format(v_gene, j_gene))
+                    df_merged = df_merged.loc[df_merged['v_gene'].str.contains(v_gene)]
+                    if len(df_merged) > 0:
+                        df_merged = df_merged.loc[df_merged['j_gene'].str.contains(j_gene)]
+                    #print("Keeping {0} sequences".format(len(df_merged)))
+                if len(df_merged) == 0:
+                    #print("FOUND NO MATCHES")
+                    continue
+                dfs.append(df_merged)
+                #except:
+                #    print("ERROR with {0}".format(row_rep))
+                #    continue
             if len(dfs) == 0:
                 continue
             df_cdr3_irec = pd.concat(dfs)
@@ -350,7 +349,8 @@ if __name__ == "__main__":
         except:
             continue
 
-    #save dictionary
+    #make directory and save results
+    os.makedirs(options.out_folder)
     test_name_out = os.path.join(options.out_folder, options.cdr3_file.split("./")[-1].replace(".csv", "_results.pickle"))
 
     with open(test_name_out, 'wb') as filehandler:
@@ -358,7 +358,7 @@ if __name__ == "__main__":
 
     with open(test_name_out, 'rb') as f:
         model = pickle.load(f)
-    print("+++ pickle object saved and reload, saving the .csv file for each TCRs, everything seems OK! +++++")
+    print("+++ pickle object saved and reloaded, saving the .csv file for each TCRs, everything seems OK! +++++")
 
     #save a .csv for each key
     for key, df_irec in model.items():
