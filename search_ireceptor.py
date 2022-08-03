@@ -89,57 +89,7 @@ def generateQuery(field, value):
     return query_str
 
 
-def searchCDR3(url, cdr3_file, verbose):
-    # Ensure our HTTP set up has been done.
-    initHTTP()
-    # Get the HTTP header information (in the form of a dictionary)
-    header_dict = getHeaderDict()
-    # Open the file that contains the list of CDR3s to search
-    try:
-        cdr3_df = pd.read_csv(cdr3_file, sep='\t', engine='python')
-    except Exception as err:
-        print("ERROR: Unable to open file {0}- {1}".format(cdr3_file, err))
-        return False
-    # Get the CDR3 list from the column header.
-    # Build the full URL combining the URL and the entry point.
-    query_url = url
-    # Iterate over the CDR3s
-    #df_info_total =pd.DataFrame()
-    df_data_total =pd.DataFrame()
-    for index,cdr3_row in cdr3_df.iterrows():
-        #print(cdr3_row)
-        cdr3_query = generateQuery("junction_aa", cdr3_row["CDR3"])#cdr3_query = generateQuery("junction_aa", cdr3_row[cdr3_header])
-        if verbose:
-            print('INFO: Performing query: ' + str(cdr3_query))
-        # Perform the query.
-        try:
-            query_json = processQuery(query_url, header_dict, cdr3_query, verbose)
-        except Exception as err:
-            print("ERROR: Unable")
-            continue
-        if not 'Rearrangement' in query_json:
-            #print("\n####### NO REARRANGEMENTS FOR ({0}) IN {1}".format(cdr3_row["CDR3"],query_url))
-            continue
-        #print("####################AAAAAAAAAAAAAAAAAAA",query_json)
-        #json_info = query_json['Info']#print("JSON_INFOOOO##############",query_json)
-        json_data = query_json['Rearrangement']
-        #df_info = pd.json_normalize(json_info)
-        df_data = pd.json_normalize(json_data)
-        df_data_total = df_data_total.append(df_data)
-        #if "single_cell" in ID_study:
-        #data["Single_cell"] = ID_study["single_cell"]
-        #df_info_total = df_info_total.append(df_info)
-    if not df_data_total.empty :
-        data = pd.DataFrame(df_data_total[["junction_aa","repertoire_id","data_processing_id","locus","sequence","sequence_id","v_gene","j_gene"]])###"D GENE DOESNT WORK FOR VDJ SERVER"
-        if "cell_id" in df_data_total:
-       	    data = pd.DataFrame(df_data_total[["junction_aa","repertoire_id","data_processing_id","locus","cell_id","sequence","sequence_id","v_gene","j_gene"]])###"D GENE DOESNT WORK FOR VDJ SERVER"
-            #print("FOUND CELL ID")
-        data["URL"] = query_url
-        with pd.option_context('display.max_rows', None,'display.max_columns', None,'display.precision', 3,):
-            return data
-    else:
-        data = pd.DataFrame()
-        return data
+
 
 def searchCDR3_single_seq(url, cdr3_seq, verbose):
     # Ensure our HTTP set up has been done.
